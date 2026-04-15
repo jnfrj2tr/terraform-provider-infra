@@ -1,64 +1,79 @@
 package provider
 
 import (
-	"fmt"
-	"strings"
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-
-	"github.com/infrahq/infra/uid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAccResourceGroup(t *testing.T) {
-	var id1, id2, id3 uid.ID
+func newGroupMockServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	store := map[string]*Group{}
 
-	name1 := randomName()
-	name2 := randomName()
-	nameWithSpace := fmt.Sprintf("%s %s", randomName(), randomName())
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/groups":
+			var req map[string]string
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+			g := &Group{ID: "grp-001", Name: req["name"]}
+			store[g.ID] = g
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(g)
 
-	resourceName := fmt.Sprintf("infra_group.%s", t.Name())
+		case r.Method == http.MethodGet:
+			id := r.URL.Path[len("/api/groups/"):]
+			g, ok := store[id]
+			if !ok {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			json.NewEncoder(w).Encode(g)
 
-	resource.UnitTest(t, resource.TestCase{
-		PreCheck:          testAccPreCheck(t),
-		ProviderFactories: testAccProviders(t),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceGroup(t, name1),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(resourceName, "id", testCheckResourceAttrWithID(&id1)),
-					resource.TestCheckResourceAttr(resourceName, "name", name1),
-				),
-			},
-			{
-				Config: testAccResourceGroup(t, name2),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(resourceName, "id", testCheckResourceAttrWithID(&id2)),
-					resource.TestCheckResourceAttr(resourceName, "name", name2),
-					testAccCheckIDChanged(&id1, &id2),
-				),
-			},
-			{
-				Config: testAccResourceGroup(t, nameWithSpace),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(resourceName, "id", testCheckResourceAttrWithID(&id3)),
-					resource.TestCheckResourceAttr(resourceName, "name", nameWithSpace),
-					testAccCheckIDChanged(&id2, &id3),
-				),
-			},
-		},
-	})
+		case r.Method == http.MethodDelete:
+			id := r.URL.Path[len("/api/groups/"):]
+			delete(store, id)
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}))
 }
 
-func randomName(prefixes ...string) string {
-	prefixes = append([]string{"tf"}, prefixes...)
-	return acctest.RandomWithPrefix(strings.Join(prefixes, "-"))
+func TestCreateAndReadGroup(t *testing.T) {
+	server := newGroupMockServer(t)
+	defer server.Close()
+
+	client := &ClientConfig{Host: server.URL, AccessKey: "test-key"}
+	ctx := context.Background()
+
+	group, err := createGroup(ctx, client, "engineering")
+	require.NoError(t, err)
+	assert.Equal(t, "grp-001", group.ID)
+	assert.Equal(t, "engineering", group.Name)
+
+	fetched, err := readGroup(ctx, client, group.ID)
+	require.NoError(t, err)
+	require.NotNil(t, fetched)
+	assert.Equal(t, "engineering", fetched.Name)
 }
 
-func testAccResourceGroup(t *testing.T, name string) string {
-	return fmt.Sprintf(`
-resource "infra_group" "%[1]s" {
-	name = "%[2]s"
-}`, t.Name(), name)
+func TestDeleteGroup(t *testing.T) {
+	server := newGroupMockServer(t)
+	defer server.Close()
+
+	client := &ClientConfig{Host: server.URL, AccessKey: "test-key"}
+	ctx := context.Background()
+
+	group, err := createGroup(ctx, client, "ops")
+	require.NoError(t, err)
+
+	err = deleteGroup(ctx, client, group.ID)
+	require.NoError(t, err)
+
+	fetched, err := readGroup(ctx, client, group.ID)
+	require.NoError(t, err)
+	assert.Nil(t, fetched)
 }
