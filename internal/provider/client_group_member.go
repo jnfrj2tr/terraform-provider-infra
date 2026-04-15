@@ -7,42 +7,47 @@ import (
 
 type GroupMember struct {
 	ID      string `json:"id"`
-	GroupID string `json:"groupID"`
-	UserID  string `json:"userID"`
+	GroupID string `json:"groupId"`
+	UserID  string `json:"userId"`
 }
 
-type AddGroupMemberRequest struct {
-	UserID string `json:"userID"`
-}
-
-func addGroupMember(client *http.Client, host, token, groupID, userID string) (*GroupMember, error) {
-	body := AddGroupMemberRequest{UserID: userID}
-	var member GroupMember
-	err := doRequest(client, http.MethodPost, host, fmt.Sprintf("/api/groups/%s/users", groupID), token, body, &member)
-	if err != nil {
-		return nil, fmt.Errorf("adding group member: %w", err)
+func addGroupMember(client *Client, groupID, userID string) (*GroupMember, error) {
+	body := map[string]string{
+		"userId": userID,
 	}
+
+	var member GroupMember
+	err := doRequest(client, http.MethodPost, fmt.Sprintf("/api/groups/%s/users", groupID), body, &member)
+	if err != nil {
+		return nil, fmt.Errorf("error adding group member: %w", err)
+	}
+
+	member.GroupID = groupID
+	member.UserID = userID
 	return &member, nil
 }
 
-func readGroupMember(client *http.Client, host, token, groupID, userID string) (*GroupMember, error) {
+func readGroupMember(client *Client, groupID, userID string) (*GroupMember, error) {
 	var members []GroupMember
-	err := doRequest(client, http.MethodGet, host, fmt.Sprintf("/api/groups/%s/users", groupID), token, nil, &members)
+	err := doRequest(client, http.MethodGet, fmt.Sprintf("/api/groups/%s/users", groupID), nil, &members)
 	if err != nil {
-		return nil, fmt.Errorf("reading group members: %w", err)
+		return nil, fmt.Errorf("error reading group member: %w", err)
 	}
+
 	for _, m := range members {
 		if m.UserID == userID {
+			m.GroupID = groupID
 			return &m, nil
 		}
 	}
-	return nil, fmt.Errorf("group member %s not found in group %s", userID, groupID)
+
+	return nil, nil
 }
 
-func removeGroupMember(client *http.Client, host, token, groupID, userID string) error {
-	err := doRequest(client, http.MethodDelete, host, fmt.Sprintf("/api/groups/%s/users/%s", groupID, userID), token, nil, nil)
+func removeGroupMember(client *Client, groupID, userID string) error {
+	err := doRequest(client, http.MethodDelete, fmt.Sprintf("/api/groups/%s/users/%s", groupID, userID), nil, nil)
 	if err != nil {
-		return fmt.Errorf("removing group member: %w", err)
+		return fmt.Errorf("error removing group member: %w", err)
 	}
 	return nil
 }
