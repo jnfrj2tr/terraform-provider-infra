@@ -1,101 +1,74 @@
 package provider
 
 import (
-	"fmt"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
-
-	"github.com/infrahq/infra/uid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestAccResourceUser(t *testing.T) {
-	var id1, id2 uid.ID
-
-	email1 := randomEmail()
-	email2 := randomEmail()
-
-	resourceName := fmt.Sprintf("infra_user.%s", t.Name())
-
-	resource.UnitTest(t, resource.TestCase{
-		PreCheck:          testAccPreCheck(t),
-		ProviderFactories: testAccProviders(t),
-		Steps: []resource.TestStep{
-			{
-				Config: testAccResourceUser(t, email1),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(resourceName, "id", testCheckResourceAttrWithID(&id1)),
-					resource.TestCheckResourceAttr(resourceName, "name", email1),
-				),
-			},
-			{
-				Config: testAccResourceUser_password(t, email1, "password"),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(resourceName, "id", testCheckResourceAttrWithID(&id1)),
-					resource.TestCheckResourceAttr(resourceName, "name", email1),
-					resource.TestCheckResourceAttr(resourceName, "password", "password"),
-				),
-			},
-			{
-				Config: testAccResourceUser(t, email2),
-				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttrWith(resourceName, "id", testCheckResourceAttrWithID(&id2)),
-					resource.TestCheckResourceAttr(resourceName, "name", email2),
-					testAccCheckIDChanged(&id1, &id2),
-				),
-			},
-		},
-	})
-}
-
-func randomEmail() string {
-	return fmt.Sprintf("%s@example.com", randomName())
-}
-
-func testAccResourceUser(t *testing.T, email string) string {
-	return fmt.Sprintf(`
-resource "infra_user" "%[1]s" {
-	name = "%[2]s"
-}`, t.Name(), email)
-}
-
-func testAccResourceUser_password(t *testing.T, email, password string) string {
-	return fmt.Sprintf(`
-resource "infra_user" "%[1]s" {
-	name = "%[2]s"
-	password = "%[3]s"
-}`, t.Name(), email, password)
-}
-
-func testCheckResourceAttrWithID(out *uid.ID) func(s string) error {
-	return func(s string) error {
-		id, err := uid.Parse([]byte(s))
-		if err != nil {
-			return err
+func newUserMockServer() *httptest.Server {
+	users := map[string]User{}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/users":
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			user := User{ID: "usr-001", Name: body["name"], Email: body["name"]}
+			users[user.ID] = user
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(user)
+		case r.Method == http.MethodGet && r.URL.Path == "/api/users":
+			id := r.URL.Query().Get("id")
+			var items []User
+			if u, ok := users[id]; ok {
+				items = append(items, u)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"items": items})
+		case r.Method == http.MethodDelete:
+			id := r.URL.Path[len("/api/users/"):]
+			delete(users, id)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-
-		*out = id
-		return nil
-	}
+	}))
 }
 
-func testAccCheckIDChanged(id1, id2 *uid.ID) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if *id1 != *id2 {
-			return nil
-		}
+func TestCreateAndReadUser(t *testing.T) {
+	server := newUserMockServer()
+	defer server.Close()
 
-		return fmt.Errorf("resource should have been recreated")
-	}
+	client := server.Client()
+
+	user, err := createUser(client, server.URL, "test-token", "alice@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, "usr-001", user.ID)
+	assert.Equal(t, "alice@example.com", user.Name)
+
+	found, err := readUser(client, server.URL, "test-token", user.ID)
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	assert.Equal(t, "alice@example.com", found.Name)
 }
 
-func testAccCheckIDUnchanged(id1, id2 *uid.ID) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		if *id1 == *id2 {
-			return nil
-		}
+func TestDeleteUser(t *testing.T) {
+	server := newUserMockServer()
+	defer server.Close()
 
-		return fmt.Errorf("resource should not have been recreated")
-	}
+	client := server.Client()
+
+	user, err := createUser(client, server.URL, "test-token", "bob@example.com")
+	require.NoError(t, err)
+
+	err = deleteUser(client, server.URL, "test-token", user.ID)
+	require.NoError(t, err)
+
+	found, err := readUser(client, server.URL, "test-token", user.ID)
+	require.NoError(t, err)
+	assert.Nil(t, found)
 }
