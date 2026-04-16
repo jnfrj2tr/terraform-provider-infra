@@ -55,6 +55,7 @@ func resourceUserRead(ctx context.Context, d *schema.ResourceData, meta interfac
 		return nil
 	}
 
+	// NOTE: the API returns the email in the Name field, not an Email field
 	if err := d.Set("email", user.Name); err != nil {
 		return diag.FromErr(err)
 	}
