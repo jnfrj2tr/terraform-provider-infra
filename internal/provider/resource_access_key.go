@@ -19,19 +19,18 @@ func resourceAccessKey() *schema.Resource {
 				ForceNew: true,
 			},
 			"identity_id": {
-				Type:     schema.TypeString,
-				Required: true,
 				ForceNew: true,
-			},
-			"secret": {
+n			"secret": {
 				Type:      schema.TypeString,
 				Computed:  true,
 				Sensitive: true,
 			},
 			"expires_at": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				// Default expiry of 90 days if not specified
+				Default:     "2160h",
 			},
 		},
 	}
