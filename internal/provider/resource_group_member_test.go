@@ -25,6 +25,7 @@ func newGroupMemberMockServer() *httptest.Server {
 				{ID: "member-1", GroupID: "group-1", UserID: "user-1"},
 			})
 		case r.Method == http.MethodDelete:
+			// Return 204 No Content on successful deletion
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -52,6 +53,10 @@ func TestAddAndReadGroupMember(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatal("expected member to be found, got nil")
+	}
+	// also verify the returned member has the correct GroupID
+	if found.GroupID != "group-1" {
+		t.Errorf("expected groupID group-1, got %s", found.GroupID)
 	}
 }
 
