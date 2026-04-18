@@ -15,8 +15,8 @@ func New(version string) func() *schema.Provider {
 				"host": {
 					Type:        schema.TypeString,
 					Optional:    true,
-					DefaultFunc: schema.EnvDefaultFunc("INFRA_HOST", nil),
-					Description: "The Infra API host URL.",
+					DefaultFunc: schema.EnvDefaultFunc("INFRA_HOST", "https://api.infrahq.com"),
+					Description: "The Infra API host URL. Defaults to https://api.infrahq.com if not set.",
 				},
 				"access_key": {
 					Type:        schema.TypeString,
