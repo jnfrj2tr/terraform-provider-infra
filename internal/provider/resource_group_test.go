@@ -29,6 +29,7 @@ func newGroupMockServer(t *testing.T) *httptest.Server {
 			id := r.URL.Path[len("/api/groups/"):]
 			g, ok := store[id]
 			if !ok {
+				// Return 404 with an empty body; readGroup should treat this as a nil result
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -73,6 +74,7 @@ func TestDeleteGroup(t *testing.T) {
 	err = deleteGroup(ctx, client, group.ID)
 	require.NoError(t, err)
 
+	// After deletion, readGroup should return nil without an error (soft-not-found)
 	fetched, err := readGroup(ctx, client, group.ID)
 	require.NoError(t, err)
 	assert.Nil(t, fetched)
