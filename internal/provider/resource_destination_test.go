@@ -69,6 +69,10 @@ func TestCreateAndReadDestination(t *testing.T) {
 	if read.Kind != "kubernetes" {
 		t.Errorf("expected kind kubernetes, got %s", read.Kind)
 	}
+	// Also verify UniqueID is preserved on read
+	if read.UniqueID != "uid-xyz" {
+		t.Errorf("expected uniqueID uid-xyz, got %s", read.UniqueID)
+	}
 }
 
 func TestDeleteDestination(t *testing.T) {
