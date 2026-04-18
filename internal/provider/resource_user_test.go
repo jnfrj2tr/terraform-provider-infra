@@ -54,6 +54,8 @@ func TestCreateAndReadUser(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, found)
 	assert.Equal(t, "alice@example.com", found.Name)
+	// also verify the email field is populated correctly
+	assert.Equal(t, "alice@example.com", found.Email)
 }
 
 func TestDeleteUser(t *testing.T) {
