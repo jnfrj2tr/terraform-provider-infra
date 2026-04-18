@@ -19,7 +19,8 @@ func resourceUser() *schema.Resource {
 				Type:        schema.TypeString,
 				Required:    true,
 				ForceNew:    true,
-				Description: "Email address of the user.",
+				Description: "Email address of the user. Must be a valid email format.",
+				ValidateFunc: validateEmail,
 			},
 		},
 	}
