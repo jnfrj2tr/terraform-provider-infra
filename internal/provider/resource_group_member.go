@@ -56,8 +56,9 @@ func resourceGroupMemberRead(ctx context.Context, d *schema.ResourceData, meta i
 
 	_, err := readGroupMember(client, host, token, groupID, userID)
 	if err != nil {
+		// If the member no longer exists, remove from state rather than erroring.
 		d.SetId("")
-		return diag.FromErr(err)
+		return nil
 	}
 	return nil
 }
