@@ -41,6 +41,8 @@ func readGroupMember(client *Client, groupID, userID string) (*GroupMember, erro
 		}
 	}
 
+	// Return nil, nil when the member is not found so the caller can treat
+	// a missing member as a signal to recreate the resource rather than error.
 	return nil, nil
 }
 
