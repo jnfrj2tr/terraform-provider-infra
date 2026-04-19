@@ -47,6 +47,7 @@ func readGroup(ctx context.Context, client *ClientConfig, id string) (*Group, er
 
 // updateGroup renames an existing group by ID.
 // Note: the upstream API doesn't expose this yet, but keeping it here for future use.
+// TODO: revisit once https://github.com/infrahq/infra/issues is updated with PATCH /api/groups support.
 func updateGroup(ctx context.Context, client *ClientConfig, id string, name string) (*Group, error) {
 	body := map[string]string{"name": name}
 
