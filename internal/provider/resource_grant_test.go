@@ -79,6 +79,8 @@ func TestDeleteGrant(t *testing.T) {
 	err = deleteGrant(ctx, client, id)
 	require.NoError(t, err)
 
+	// After deletion, readGrant should return nil without an error.
+	// This confirms the provider treats a 404 as a removed resource (not an error).
 	result, err := readGrant(ctx, client, id)
 	require.NoError(t, err)
 	assert.Nil(t, result)
