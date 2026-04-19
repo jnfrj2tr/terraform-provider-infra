@@ -53,6 +53,11 @@ func TestCreateAndReadAccessKey(t *testing.T) {
 	if v := d.Get("secret").(string); v != "supersecret" {
 		t.Errorf("expected secret 'supersecret', got '%s'", v)
 	}
+
+	// Also verify that name is correctly set after create
+	if v := d.Get("name").(string); v != "test-key" {
+		t.Errorf("expected name 'test-key', got '%s'", v)
+	}
 }
 
 func TestDeleteAccessKey(t *testing.T) {
