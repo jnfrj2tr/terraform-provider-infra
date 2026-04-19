@@ -7,38 +7,34 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func newGroupMemberMockServer() *httptest.Server {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/api/groups/group-123/users", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/groups/group-1/users":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"id":      "member-456",
-				"groupID": "group-123",
-				"userID":  "user-789",
+				"id":      "member-1",
+				"groupID": "group-1",
+				"userID":  "user-1",
 			})
-		case http.MethodGet:
+		case r.Method == http.MethodGet && r.URL.Path == "/api/groups/group-1/users/user-1":
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"items": []map[string]interface{}{
-					{
-						"id":      "user-789",
-						"groupID": "group-123",
-					},
-				},
+				"id":      "member-1",
+				"groupID": "group-1",
+				"userID":  "user-1",
 			})
-		case http.MethodDelete:
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/groups/group-1/users/user-1":
 			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
 		}
-	})
-
-	return httptest.NewServer(mux)
+	}))
 }
 
 func TestAddAndReadGroupMember(t *testing.T) {
@@ -46,18 +42,27 @@ func TestAddAndReadGroupMember(t *testing.T) {
 	defer server.Close()
 
 	resource.UnitTest(t, resource.TestCase{
-		ProviderFactories: testProviderFactories(server.URL),
+		ProviderFactories: map[string]func() (*schema.Provider, error){
+			"infra": func() (*schema.Provider, error) {
+				return testProvider(server.URL), nil
+			},
+		},
 		Steps: []resource.TestStep{
 			{
 				Config: `
+provider "infra" {
+  url         = "` + server.URL + `"
+  access_key  = "test-key"
+}
+
 resource "infra_group_member" "test" {
-  group_id = "group-123"
-  user_id  = "user-789"
+  group_id = "group-1"
+  user_id  = "user-1"
 }
 `,
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("infra_group_member.test", "group_id", "group-123"),
-					resource.TestCheckResourceAttr("infra_group_member.test", "user_id", "user-789"),
+					resource.TestCheckResourceAttr("infra_group_member.test", "group_id", "group-1"),
+					resource.TestCheckResourceAttr("infra_group_member.test", "user_id", "user-1"),
 				),
 			},
 		},
@@ -69,17 +74,26 @@ func TestRemoveGroupMember(t *testing.T) {
 	defer server.Close()
 
 	resource.UnitTest(t, resource.TestCase{
-		ProviderFactories: testProviderFactories(server.URL),
+		ProviderFactories: map[string]func() (*schema.Provider, error){
+			"infra": func() (*schema.Provider, error) {
+				return testProvider(server.URL), nil
+			},
+		},
 		Steps: []resource.TestStep{
 			{
 				Config: `
+provider "infra" {
+  url         = "` + server.URL + `"
+  access_key  = "test-key"
+}
+
 resource "infra_group_member" "test" {
-  group_id = "group-123"
-  user_id  = "user-789"
+  group_id = "group-1"
+  user_id  = "user-1"
 }
 `,
 				Check: resource.ComposeTestCheckFunc(
-					resource.TestCheckResourceAttr("infra_group_member.test", "group_id", "group-123"),
+					resource.TestCheckResourceAttr("infra_group_member.test", "group_id", "group-1"),
 				),
 			},
 		},
