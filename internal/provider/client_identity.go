@@ -22,6 +22,11 @@ type createIdentityRequest struct {
 
 // createIdentity creates a new identity in Infra and returns the created identity.
 func createIdentity(client *http.Client, baseURL, accessKey, name, kind string) (*Identity, error) {
+	// Default to "user" kind if none is specified
+	if kind == "" {
+		kind = "user"
+	}
+
 	body := createIdentityRequest{
 		Name: name,
 		Kind: kind,
