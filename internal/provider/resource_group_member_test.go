@@ -10,66 +10,78 @@ import (
 )
 
 func newGroupMemberMockServer() *httptest.Server {
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodPost && r.URL.Path == "/api/groups/group-1/users":
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/groups/group-123/users", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(GroupMember{
-				ID:      "member-1",
-				GroupID: "group-1",
-				UserID:  "user-1",
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":      "member-456",
+				"groupID": "group-123",
+				"userID":  "user-789",
 			})
-		case r.Method == http.MethodGet && r.URL.Path == "/api/groups/group-1/users":
+		case http.MethodGet:
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]GroupMember{
-				{ID: "member-1", GroupID: "group-1", UserID: "user-1"},
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"items": []map[string]interface{}{
+					{
+						"id":      "user-789",
+						"groupID": "group-123",
+					},
+				},
 			})
-		case r.Method == http.MethodDelete:
-			// Return 204 No Content on successful deletion
+		case http.MethodDelete:
 			w.WriteHeader(http.StatusNoContent)
-		default:
-			w.WriteHeader(http.StatusNotFound)
 		}
-	}))
+	})
+
+	return httptest.NewServer(mux)
 }
 
 func TestAddAndReadGroupMember(t *testing.T) {
 	server := newGroupMemberMockServer()
 	defer server.Close()
 
-	client := &Client{Host: server.URL, HTTPClient: server.Client()}
-
-	member, err := addGroupMember(client, "group-1", "user-1")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if member.UserID != "user-1" {
-		t.Errorf("expected userID user-1, got %s", member.UserID)
-	}
-
-	found, err := readGroupMember(client, "group-1", "user-1")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if found == nil {
-		t.Fatal("expected member to be found, got nil")
-	}
-	// also verify the returned member has the correct GroupID
-	if found.GroupID != "group-1" {
-		t.Errorf("expected groupID group-1, got %s", found.GroupID)
-	}
+	resource.UnitTest(t, resource.TestCase{
+		ProviderFactories: testProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "infra_group_member" "test" {
+  group_id = "group-123"
+  user_id  = "user-789"
+}
+`,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("infra_group_member.test", "group_id", "group-123"),
+					resource.TestCheckResourceAttr("infra_group_member.test", "user_id", "user-789"),
+				),
+			},
+		},
+	})
 }
 
 func TestRemoveGroupMember(t *testing.T) {
 	server := newGroupMemberMockServer()
 	defer server.Close()
 
-	client := &Client{Host: server.URL, HTTPClient: server.Client()}
-
-	err := removeGroupMember(client, "group-1", "user-1")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
+	resource.UnitTest(t, resource.TestCase{
+		ProviderFactories: testProviderFactories(server.URL),
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "infra_group_member" "test" {
+  group_id = "group-123"
+  user_id  = "user-789"
 }
-
-var _ = resource.TestCase{}
+`,
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr("infra_group_member.test", "group_id", "group-123"),
+				),
+			},
+		},
+	})
+}
